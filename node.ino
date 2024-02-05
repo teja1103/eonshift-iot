@@ -2,23 +2,22 @@
 #include <PubSubClient.h>
 #include <Wire.h>
 #include <Adafruit_INA219.h>
-
-// WiFi credentials
-const char *ssid = "Wifi";
-const char *password = "password";
+const char *ssid = "rpi";
+const char *password = "password123";
 
 // MQTT Broker details
-const char *mqttServer = "broker.hivemq.com";
+const char *mqttServer = "10.42.0.1";
 const int mqttPort = 1883;
-const char *mqttClientId = "ESP8266Clientviki123453"; // Ensure this is unique if connecting multiple devices
-const char *mqttPublishTopic = "eonshift/292720d6-9447-4256-ab3c-d3adbd98c6bc/energy";
-const char *mqttSubscribeTopic = "292720d6-9447-4256-ab3c-d3adbd98c6bc/status";
+const char *mqttClientId = "ESP8266ClientMachine55455445sda3332"; // Ensure this is unique if connecting multiple devices
+const char *mqttPublishTopic = "eonshift/8f55bad2-974d-4aa1-b100-2a1ce54f2931/energy";
+const char *mqttSubscribeTopic = "eonshift/8f55bad2-974d-4aa1-b100-2a1ce54f2931/status";
 
 WiFiClient espClient;
 PubSubClient client(espClient);
 Adafruit_INA219 ina219;
 
-bool isActive = true; // Global variable to track active/inactive status
+const int relayPin = D5;  // Relay control pin
+bool isActive = false;    // Active/inactive status
 
 void setup_wifi() {
   Serial.print("Connecting to WiFi");
@@ -43,12 +42,12 @@ void callback(char* topic, byte* payload, unsigned int length) {
   if (String(topic) == mqttSubscribeTopic) {
     if (message == "active") {
       isActive = true;
-      digitalWrite(LED_BUILTIN, LOW); // Turn on the light (LED)
-      Serial.println("Light turned ON and data publishing resumed");
+      digitalWrite(relayPin, HIGH); // Turn on the relay (motor on)
+      Serial.println("Device activated, motor turned ON");
     } else if (message == "inactive") {
       isActive = false;
-      digitalWrite(LED_BUILTIN, HIGH); // Turn off the light (LED)
-      Serial.println("Light turned OFF and data publishing stopped");
+      digitalWrite(relayPin, LOW); // Turn off the relay (motor off)
+      Serial.println("Device deactivated, motor turned OFF");
     }
   }
 }
@@ -70,44 +69,38 @@ void reconnect() {
 
 void publishEnergyData() {
   if (isActive) {
-    // Check if the INA219 sensor is detected
-    if (!ina219.begin()) {
-      Serial.println("Failed to find INA219 chip. Please check wiring and power.");
-      return;
+    float current_mA = ina219.getCurrent_mA();
+    float voltage_V = ina219.getBusVoltage_V();
+    float power_W = (current_mA / 1000.0) * voltage_V;
+    float energy_Wh = (power_W * 0.001389)* 1000; // Energy for the 5-second interval
+
+    if (energy_Wh < 0) {
+      energy_Wh = 0;
     }
-
-    float current_mA = ina219.getCurrent_mA(); // Current in milliamps
-    float voltage_V = ina219.getBusVoltage_V(); // Voltage in volts
-    float power_W = (current_mA / 1000.0) * voltage_V; // Power in watts
-
-    // Time interval is 5 seconds, or 0.001389 hours (5 / 3600)
-    float energy_Wh = power_W * 0.001389; // Energy in watt-hours for the 5-second interval
-
-    // Convert energy to a string
+    
     char energyStr[20];
-    dtostrf(energy_Wh, 6, 4, energyStr); // Convert float to string
-
-    // Print the energy data to the Serial Monitor
+    dtostrf(energy_Wh, 6, 4, energyStr);
     Serial.print("Energy (Wh) for 5 seconds: ");
     Serial.println(energyStr);
-
     client.publish(mqttPublishTopic, energyStr);
   }
 }
 
 void setup() {
   Serial.begin(115200);
-  Wire.begin();  // Start I2C interface
   setup_wifi();
-  client.setServer(mqttServer, mqttPort);
-  client.setCallback(callback);
-  pinMode(LED_BUILTIN, OUTPUT);
-
-  // Check if the INA219 sensor is detected during setup
+  Wire.begin();
   if (!ina219.begin()) {
-    Serial.println("Failed to find INA219 chip during setup. Please check wiring and power.");
+    Serial.println("Failed to find INA219 chip");
     while (1) { delay(10); }
   }
+
+  pinMode(relayPin, OUTPUT);
+  digitalWrite(relayPin, LOW); // Relay is normally HIGH (motor off)
+
+//  setup_wifi();
+  client.setServer(mqttServer, mqttPort);
+  client.setCallback(callback);
 }
 
 void loop() {
@@ -117,7 +110,7 @@ void loop() {
   client.loop();
 
   static unsigned long lastPublishTime = millis();
-  if (millis() - lastPublishTime > 5000) { // Publish every 5 seconds
+  if (millis() - lastPublishTime > 5000) {
     publishEnergyData();
     lastPublishTime = millis();
   }
