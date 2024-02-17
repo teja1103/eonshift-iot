@@ -8,9 +8,9 @@ const char *password = "password123";
 // MQTT Broker details
 const char *mqttServer = "10.42.0.1";
 const int mqttPort = 1883;
-const char *mqttClientId = "ESP8266ClientMachine55455445sda3332"; // Ensure this is unique if connecting multiple devices
-const char *mqttPublishTopic = "eonshift/8f55bad2-974d-4aa1-b100-2a1ce54f2931/energy";
-const char *mqttSubscribeTopic = "eonshift/8f55bad2-974d-4aa1-b100-2a1ce54f2931/status";
+const char *mqttClientId = "client id"; // Ensure this is unique if connecting multiple devices
+const char *mqttPublishTopic = "eonshift/device-id/energy";
+const char *mqttSubscribeTopic = "eonshift/device-id/status";
 
 WiFiClient espClient;
 PubSubClient client(espClient);
